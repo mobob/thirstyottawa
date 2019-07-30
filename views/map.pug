@@ -1,0 +1,312 @@
+//- this is my FIRST foray into node.js templates
+//- i recognize having THIS much js in here is gross.
+//- i'd love some pointers on how to do this better, be brutal :)
+doctype html
+html(lang="en")
+  head(profile="http://www.w3.org/2005/10/profile")
+    script(async, src="https://www.googletagmanager.com/gtag/js?id=UA-144227400-1")
+    script.
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'UA-144227400-1');
+    link(rel="icon", type="image/png", href="/favicon.png")
+    title= title
+    meta(name="viewport", content="initial-scale=1.0").
+    meta(charset="utf-8").
+    style(type="text/css").
+      html, body, #ottawaMap {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      #info {
+        z-index: 1;
+        opacity: 0;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        margin: 0;
+        background: rgba(0,60,136,0.7);
+        color: white;
+        border: 0;
+        transition: opacity 100ms ease-in;
+      }
+  body
+    #ottawaMap
+    #tweetPanel(style="text-align:center;background-color:white;")
+      | 👇🏼 Comments/Corrections? 👇🏼
+      br
+      a(href="https://twitter.com/intent/tweet?screen_name=thirsty_ottawa&ref_src=twsrc%5Etfw", class="twitter-mention-buttonn", data-show-count="false").
+        Tweet us @thirsty_ottawa
+    script.
+      var map;
+
+      // borrowed from https://andrew.hedges.name/experiments/haversine/
+      function deg2rad(deg) {
+        rad = deg * Math.PI/180; // radians = degrees * pi/180
+        return rad;
+      }
+      function roughMetresBetween(lat1r, lon1r, lat2r, lon2r) {
+        var lat1 = deg2rad(lat1r);
+        var lon1 = deg2rad(lon1r);
+        var lat2 = deg2rad(lat2r);
+        var lon2 = deg2rad(lon2r);
+        var dlon = lon2 - lon1;
+        var dlat = lat2 - lat1;
+        var a = Math.pow((Math.sin(dlat/2)), 2) + Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(dlon/2), 2);
+        var c = 2 * Math.atan2( Math.sqrt(a), Math.sqrt(1-a) );
+        var d = 6373.00 * c; //(where R is the radius of the Earth)
+
+        // result is in KM, so for metres * by 1000
+        return d * 1000.0;
+      }
+      function closeCoordinateMatchFound(coords, allcoords) {
+        for(var i = 0; i < allcoords.length; i++) {
+          var delta = roughMetresBetween(coords[0], coords[1], allcoords[i][0], allcoords[i][1]);
+          console.log("last delta: " + String(delta));
+          // 60 is big enough to catch the strathcona one and all the others
+          if(delta < 60.0) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function escapeHtml(unsafe) {
+        return String(unsafe)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+      function infoWindowContentFrom(id, coords, description, status, statusnote,
+          imageurl, mapillaryUrl, source, date, nodeid) {
+        var descriptionString = description ? '<p>' + escapeHtml(description) + '</p>' : '';
+        var statusString = status ? '<p>Status: ' +  escapeHtml(status) + '</p>' : '';
+        var statusnoteString = statusnote ? '<p>Note: ' +  escapeHtml(statusnote) + '</p>' : '';
+
+        var imgString = imageurl ? '<img src="' +  encodeURI(imageurl) + '" style="max-height: 300px; max-width: 300px;"></img>' : '';
+
+        var updatedString = '';
+        if(date) {
+          try {
+            var dateobj = new Date(date);
+            updatedString = date ? '<p>(last updated ' + dateobj.toLocaleString() +', id: ' + nodeid + ')</p>' : '';
+          } catch(err) {
+            console.log("bad date: " + date);
+          }
+        }
+
+        var sourceString = source ? '<p>Source: ' +  source + '</p>' : '';
+
+        var mapillaryLink = (mapillaryUrl && mapillaryUrl.length > 0) ? ('<p><a href="' + mapillaryUrl + '" target="_blank">Open in Mapillary</a></p>') : '';
+        if(mapillaryLink && mapillaryLink.length > 0) {
+          console.log(mapillaryLink);
+        }
+        var mapsLink = '<p><a href="https://www.google.com/maps/search/?api=1&query=' + coords[0] + ',' + coords[1] + '" target="_blank">Open in Google Maps</a></p>';
+
+        return '<div id="content' + id + '">'+
+          '<div id="fountainInfo' + id + '">'+
+          '</div>'+
+          '<h2 id="firstHeading" class="firstHeading">' + id +'</h2>'+
+          '<div id="bodyContent">'+
+          '<p>Lat=' +  escapeHtml(coords[0]) + ', Long=' +  escapeHtml(coords[1]) + '</p>' +
+          descriptionString +
+          statusString +
+          statusnoteString +
+          imgString +
+          sourceString +
+          mapillaryLink +
+          mapsLink +
+          updatedString+
+          '</div>'+
+          '</div>';
+      }
+      function initMap() {
+
+        var fountainCount = 0;
+
+        // define the map
+        map = new google.maps.Map(document.getElementById('ottawaMap'), {
+          center: {lat: 45.4211060, lng: -75.6903080},
+          zoom: 14
+        });
+
+        // add tweet tweetPanel
+        var tweetPanel = document.getElementById('tweetPanel');
+        map.controls[google.maps.ControlPosition.LEFT_BOTTOM].push(tweetPanel);
+
+        // Try HTML5 geolocation.
+        var geoInfoWindow = new google.maps.InfoWindow;
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(function(position) {
+            var pos = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            };
+
+            var youarehereImage = {
+              url: 'img/icon-youarehere.png',
+              size: new google.maps.Size(32, 32),
+              anchor: new google.maps.Point(16, 16),
+            };
+
+            var marker = new google.maps.Marker({
+              position: pos,
+              map: map,
+              title: 'Thats you!',
+              icon: youarehereImage,
+            });
+
+            marker.setAnimation(google.maps.Animation.DROP);
+
+            map.setCenter(pos);
+          }, function() {
+            //handleLocationError(true, geoInfoWindow, map.getCenter());
+          });
+        } else {
+          // Browser doesn't support Geolocation
+          //handleLocationError(false, geoInfoWindow, map.getCenter());
+        }
+
+        var infowindow = new google.maps.InfoWindow();
+
+        // define our main pushpin for fountains
+        var waterpushpinImage = {
+          url: 'img/water-pushpin.png',
+          size: new google.maps.Size(50, 50),
+        };
+
+        var toiletspushpinImage = {
+          url: 'img/washroom-pushpin.png',
+          size: new google.maps.Size(50, 50),
+        };
+
+        var infowindowContentStrings = [];
+        var infowindowPositions = [];
+
+        var osmData = !{OSMDATA};
+        for(fountainData of osmData) {
+
+          var geometry = fountainData['geometry'];
+          var coordinatesData = geometry['coordinates'];
+          var coordinates = [coordinatesData[1], coordinatesData[0]];
+          var amenity = fountainData['properties']['tags']['amenity'];
+          var imageurl = fountainData['properties']['tags']['image'];
+
+          var mapillaryUrl = '';
+          var mapillaryStem = "https://www.mapillary.com/map/im/";
+          var mapillaryValue = fountainData['properties']['tags']['mapillary'];
+          if(mapillaryValue) {
+            mapillaryUrl = mapillaryStem + mapillaryValue;
+          }
+
+          var name = fountainData['properties']['tags']['name'];
+          if(!name) {
+            name = (amenity == "toilets" ? "Washroom" : "Drinking Fountain");
+          }
+
+          var contentString = infoWindowContentFrom(
+            name,
+            coordinates,
+            fountainData['properties']['tags']['description'],
+            fountainData['properties']['tags']['wetap:status'],
+            fountainData['properties']['tags']['wetap:statusnote'],
+            imageurl,
+            mapillaryUrl,
+            fountainData['properties']['tags']['source'],
+            fountainData['properties']['meta']['timestamp'],
+            fountainData['id'],
+          );
+
+          if(contentString.length > 0) {
+            infowindowPositions.push(coordinates);
+            infowindowContentStrings.push(contentString);
+
+            var marker = new google.maps.Marker({
+              position: {lat: coordinates[0], lng: coordinates[1]},
+              map: map,
+              title: name,
+              icon: amenity == "toilets" ? toiletspushpinImage : waterpushpinImage,
+            });
+
+            marker.addListener('click', function() {
+              infowindow.open(map, marker);
+            });
+
+            var i = fountainCount;
+            google.maps.event.addListener(marker, 'click', (function(marker, i) {
+              return function() {
+                infowindow.setContent(infowindowContentStrings[i]);
+                infowindow.open(map, marker);
+              }
+            })(marker, i));
+
+            fountainCount = fountainCount + 1;
+          }
+        }
+
+        // use a special marker for the odo data
+        var image = {
+          url: 'img/marker.png',
+        };
+
+        var odoData = !{OPODATA};
+        for(odo of odoData) {
+          var coordinates = [
+            parseFloat(odo['attributes/Y_COORDINATE']),
+            parseFloat(odo['attributes/X_COORDINATE'])
+          ];
+
+          // lets see if we have one close to this - if not, don't publish
+          if(closeCoordinateMatchFound(coordinates, infowindowPositions)) {
+            console.log("found short one! " + odo['attributes/BN']);
+            continue;
+          }
+
+          console.log("didn't find a match for open data info, displaying: " + odo['attributes/BN']);
+
+          var odosource = 'Open Data Ottawa';
+          var contentString = infoWindowContentFrom(
+            'Ottawa City Fountain: ' + odo['_id'],
+            coordinates,
+            odo['attributes/BN'], //fountainData['properties']['tags']['description'],
+            odo['attributes/Open_Seasonally'],
+            null,
+            null,
+            odosource,
+            null,
+          );
+
+          if(contentString.length > 0) {
+            infowindowPositions.push(coordinates);
+            infowindowContentStrings.push(contentString);
+
+            var marker = new google.maps.Marker({
+              position: {lat: coordinates[0], lng: coordinates[1]},
+              map: map,
+              title: 'Fountain ' + fountainData['id'],
+              icon: image,
+            });
+
+            marker.addListener('click', function() {
+              infowindow.open(map, marker);
+            });
+
+            var i = fountainCount;
+            google.maps.event.addListener(marker, 'click', (function(marker, i) {
+              return function() {
+                infowindow.setContent(infowindowContentStrings[i]);
+                infowindow.open(map, marker);
+              }
+            })(marker, i));
+
+            fountainCount = fountainCount + 1;
+          }
+        }
+      }
+    - var mapsUrl = "https://maps.googleapis.com/maps/api/js?key=" + GOOGLEAPIKEY + "&callback=initMap";
+    script(src=mapsUrl, async, defer).
+    script(async, src="https://platform.twitter.com/widgets.js" charset="utf-8").
