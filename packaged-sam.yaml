@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Serverless Express Application/API powered by API Gateway and Lambda
+Description: Thirsty Ottawa - Serverless Express Application/API powered by API Gateway
+  and Lambda
 Resources:
   ApiGatewayApi:
     Type: AWS::Serverless::Api
@@ -54,14 +55,14 @@ Resources:
   AwsServerlessExpressFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://thirstyottawa-lambda/5fc573b9142b59b87eb7a0f6da52094e
+      CodeUri: s3://thirstyottawa-lambda/74bd29b4f54cc4c045b757735b02e4cf
       Handler: lambda.handler
       MemorySize: 1024
       Role:
         Fn::GetAtt:
         - LambdaExecutionRole
         - Arn
-      Runtime: nodejs8.10
+      Runtime: nodejs10.x
       Timeout: 30
       Events:
         ProxyApiRoot:
