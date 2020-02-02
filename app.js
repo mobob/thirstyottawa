@@ -64,7 +64,7 @@ router.get('/sam', (req, res) => {
 
 // The aws-serverless-express library creates a server and listens on a Unix
 // Domain Socket for you, so you can remove the usual call to app.listen.
-// app.listen(3000)
+app.listen(3000)
 //app.use('/', router)
 
 // Export your express server so you can import it in the lambda function.
