@@ -65,9 +65,14 @@ function renderMap(res) {
 }
 
 // cache the odo data for a period of time
-var osmDataCache = null;
-var osmDataCacheDate = null;
-var osmDataTTL = 60 * 1000;
+class OsmDataCache {
+  constructor() {
+    this.osmDataCache = "";
+    this.osmDataCacheDate = null;
+    this.osmDataTTL = 60 * 1000;
+  }
+}
+var osmDataCaches = {};
 
 // pull the open street map data from the overpass api
 function fetchOverpassData(req, res, onCompletion) {
@@ -75,15 +80,28 @@ function fetchOverpassData(req, res, onCompletion) {
 
   // a decent sized square around ottawa area,
   // query for the drinking water OR toilet amenities
+  var location = "ottawa";
   var ql = 'node(45.1,-75.8,45.5,-75.5)[amenity~"drinking_water|toilets"];out meta;';
 
   // minor hack to load toronto
   if(req.query.toronto) {
+    location = "toronto";
+    console.log("Toronto requested...");
     var toronto = [43.661768, -79.425454];
     ql = 'node(' + (toronto[0] - 0.3) +
       ',' + (toronto[1] - 0.2) +
       ',' + (toronto[0] + 0.3) +
       ',' + (toronto[1] + 0.2) +
+      ')[amenity~"drinking_water|toilets"];out meta;';
+  }
+  if(req.query.sydney) {
+    location = "sydney";
+    console.log("Sydney requested...");
+    var sydney = [-33.869278, 151.200302];
+    ql = 'node(' + (sydney[0] - 0.35) +
+      ',' + (sydney[1] - 0.35) +
+      ',' + (sydney[0] + 0.35) +
+      ',' + (sydney[1] + 0.35) +
       ')[amenity~"drinking_water|toilets"];out meta;';
   }
 
@@ -96,11 +114,16 @@ function fetchOverpassData(req, res, onCompletion) {
 
     if(error) {
       console.log("Error from overpass, not updating cache.");
-    } else if(allowCache(req)) {
-      // update the cache
-      osmDataCache = osmData;
-      osmDataCacheDate = Date.now();
-      console.log("Cache updated as of now: " + osmDataCacheDate);
+    } else {
+      // update the cache always
+      var cachedData = new OsmDataCache();
+      cachedData.osmDataCache = osmData;
+      cachedData.osmDataCacheDate = Date.now();
+      osmDataCaches[location] = cachedData
+      //osmDataCache = osmData;
+      //osmDatacacheLocation = location
+      //osmDataCacheDate = Date.now();
+      console.log("Cache updated as of now: " + cachedData.osmDataCacheDate);
     }
 
     onCompletion(req, res);
@@ -120,9 +143,14 @@ function afterOSM(req, res) {
   }
 }
 
-function allowCache(req) {
-  // only allow cache if other funky options not chosen
-  return !req.query.toronto;
+function parseLocation(req) {
+  if(req.query.toronto) {
+    return "toronto";
+  }
+  if(req.query.sydney) {
+    return "sydney";
+  }
+  return "ottawa";
 }
 
 
@@ -135,10 +163,11 @@ router.get('/', function(req, res, next) {
 
   // if we have any data cached at all, we use it, then spawn to update.
   // this way only the first request ever is slow.
-  if(allowCache(req) && osmDataCache) {
-
-    var ttl = Date.now() - osmDataTTL;
-    if(!osmDataCacheDate || (osmDataCacheDate < ttl)) {
+  var location = parseLocation(req);
+  var cachedData = osmDataCaches[location];
+  if(cachedData) {
+    var ttl = Date.now() - cachedData.osmDataTTL;
+    if(!cachedData.osmDataCacheDate || (cachedData.osmDataCacheDate < ttl)) {
       console.log("cache is expired at " + ttl + ", may query OSM synchronously, in progress: " + cacheRequestInProgress);
       if(!cacheRequestInProgress) {
         console.log("Making cache request.");
@@ -156,7 +185,7 @@ router.get('/', function(req, res, next) {
     }
 
     // load from the cache
-    osmData = osmDataCache;
+    osmData = cachedData.osmDataCache;
 
     // and proceed
     afterOSM(req, res);
@@ -164,7 +193,7 @@ router.get('/', function(req, res, next) {
   } else {
 
     // call as per normal, there is no cache we can use
-    console.log("Cache isn't active, going sync, last load date: " + osmDataCacheDate);
+    console.log("Cache isn't active, going sync");
     fetchOverpassData(req, res, afterOSM);
   }
 
