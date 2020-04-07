@@ -55,7 +55,7 @@ Resources:
   AwsServerlessExpressFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://thirstyottawa-lambda/74bd29b4f54cc4c045b757735b02e4cf
+      CodeUri: s3://thirstyottawa-lambda/3f5660e938ecae5024413533ec71e691
       Handler: lambda.handler
       MemorySize: 1024
       Role:

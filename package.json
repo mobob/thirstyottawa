@@ -1,7 +1,7 @@
 {
   "name": "aws-serverless-express-example",
-  "version": "2.1.1",
-  "description": "Example application for running a Node Express app on AWS Lambda using Amazon API Gateway.",
+  "version": "2.2.0",
+  "description": "Thirsty Ottawa",
   "main": "lambda.js",
   "config": {
     "s3BucketName": "thirstyottawa-lambda",
@@ -37,15 +37,15 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "aws-serverless-express": "^3.3.6",
+    "aws-serverless-express": "^3.3.8",
     "body-parser": "^1.19.0",
     "compression": "^1.7.4",
-    "cookie-parser": "^1.4.4",
+    "cookie-parser": "^1.4.5",
     "cors": "^2.8.5",
     "express": "^4.17.1",
-    "morgan": "^1.9.1",
+    "morgan": "^1.10.0",
     "pug": "^2.0.4",
-    "query-overpass": "^1.5.3",
-    "yargs": "^13.3.0"
+    "query-overpass": "^1.5.5",
+    "yargs": "^13.3.2"
   }
 }
